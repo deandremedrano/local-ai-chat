@@ -82,6 +82,36 @@ Always format your response exactly like this:
 - Low severity: [number]
 - Recommended automation candidates: [list]`;
 
+const SELENIUM_SYSTEM = `You are an expert QA automation engineer with 15 years of experience writing Selenium WebDriver test scripts in Python.
+
+When given a feature description or test cases, generate complete, ready-to-run Python Selenium test scripts using pytest.
+
+Always use this exact structure:
+
+import pytest
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
+@pytest.fixture
+def driver():
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=options
+    )
+    driver.implicitly_wait(10)
+    yield driver
+    driver.quit()
+
+Then write individual test functions for each test case. Make the scripts complete, production-ready, and include comments explaining each test. Always end with instructions on how to run the tests.`;
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("chat");
   const [chats, setChats] = useState([{ id: 1, name: "New Chat", messages: [] }]);
@@ -96,6 +126,9 @@ export default function App() {
   const [featureDesc, setFeatureDesc] = useState("");
   const [testOutput, setTestOutput] = useState("");
   const [testLoading, setTestLoading] = useState(false);
+  const [seleniumDesc, setSeleniumDesc] = useState("");
+  const [seleniumOutput, setSeleniumOutput] = useState("");
+  const [seleniumLoading, setSeleniumLoading] = useState(false);
   const fileRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -161,6 +194,17 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const exportSelenium = () => {
+    if (!seleniumOutput) return;
+    const blob = new Blob([seleniumOutput], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `test_script_${Date.now()}.py`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const generateTests = async () => {
     if (!featureDesc.trim() || testLoading) return;
     setTestLoading(true);
@@ -185,6 +229,32 @@ export default function App() {
       setTestOutput("Error generating test cases. Make sure Ollama is running.");
     }
     setTestLoading(false);
+  };
+
+  const generateSelenium = async () => {
+    if (!seleniumDesc.trim() || seleniumLoading) return;
+    setSeleniumLoading(true);
+    setSeleniumOutput("");
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "qwen2.5-coder:latest",
+          messages: [
+            { role: "system", content: SELENIUM_SYSTEM },
+            { role: "user", content: `Generate a complete Python Selenium test script for:\n\n${seleniumDesc}` }
+          ],
+          stream: false
+        }),
+      });
+      const data = await res.json();
+      setSeleniumOutput(data.message.content);
+    } catch (err) {
+      console.error(err);
+      setSeleniumOutput("Error generating script. Make sure Ollama is running.");
+    }
+    setSeleniumLoading(false);
   };
 
   const routeMessage = async (message) => {
@@ -245,10 +315,10 @@ export default function App() {
   };
 
   const tabStyle = (tab) => ({
-    padding: "0.5rem 1rem",
+    padding: "0.5rem 0.75rem",
     borderRadius: "6px",
     cursor: "pointer",
-    fontSize: "13px",
+    fontSize: "12px",
     fontWeight: 500,
     background: activeTab === tab ? "#2563eb" : "transparent",
     color: activeTab === tab ? "#fff" : "#888",
@@ -258,9 +328,10 @@ export default function App() {
   return (
     <div style={{ display: "flex", height: "100vh", background: "#0f0f0f", color: "#f0f0f0", fontFamily: "sans-serif" }}>
       <div style={{ width: "220px", background: "#111", borderRight: "1px solid #222", display: "flex", flexDirection: "column", padding: "1rem 0" }}>
-        <div style={{ padding: "0 1rem 1rem", borderBottom: "1px solid #222", display: "flex", gap: "0.5rem" }}>
+        <div style={{ padding: "0 0.75rem 1rem", borderBottom: "1px solid #222", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
           <button style={tabStyle("chat")} onClick={() => setActiveTab("chat")}>Chat</button>
           <button style={tabStyle("tests")} onClick={() => setActiveTab("tests")}>Tests</button>
+          <button style={tabStyle("scripts")} onClick={() => setActiveTab("scripts")}>Scripts</button>
         </div>
 
         {activeTab === "chat" && (
@@ -304,13 +375,21 @@ export default function App() {
 
         {activeTab === "tests" && (
           <div style={{ flex: 1, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <div style={{ fontSize: "12px", color: "#555" }}>Powered by Mistral Nemo QA Agent</div>
+            <div style={{ fontSize: "12px", color: "#555" }}>Powered by Mistral Nemo</div>
             <button onClick={exportTests} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "#1e1e1e", color: testOutput ? "#facc15" : "#333", border: "1px solid #333", cursor: testOutput ? "pointer" : "not-allowed", fontSize: "13px" }}>
               Export as Markdown
             </button>
-            <div style={{ fontSize: "11px", color: "#444", marginTop: "auto", textAlign: "center" }}>
-              100% private · no cloud
-            </div>
+            <div style={{ fontSize: "11px", color: "#444", marginTop: "auto", textAlign: "center" }}>100% private · no cloud</div>
+          </div>
+        )}
+
+        {activeTab === "scripts" && (
+          <div style={{ flex: 1, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div style={{ fontSize: "12px", color: "#555" }}>Powered by Qwen2.5 Coder</div>
+            <button onClick={exportSelenium} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "#1e1e1e", color: seleniumOutput ? "#facc15" : "#333", border: "1px solid #333", cursor: seleniumOutput ? "pointer" : "not-allowed", fontSize: "13px" }}>
+              Export as .py file
+            </button>
+            <div style={{ fontSize: "11px", color: "#444", marginTop: "auto", textAlign: "center" }}>100% private · no cloud</div>
           </div>
         )}
       </div>
@@ -335,7 +414,7 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: "13px", color: "#333", marginTop: "1rem" }}>Ask anything — the right agent will respond automatically</div>
+                  <div style={{ fontSize: "13px", color: "#333", marginTop: "1rem" }}>Ask anything — the right agent responds automatically</div>
                 </div>
               )}
               {messages.map((m, i) => (
@@ -374,19 +453,35 @@ export default function App() {
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1rem", overflowY: "auto" }}>
               <div style={{ fontSize: "14px", color: "#888" }}>Describe the feature you want to test:</div>
-              <textarea
-                value={featureDesc}
-                onChange={e => setFeatureDesc(e.target.value)}
-                placeholder="Example: A login form with email and password fields. Users can log in with valid credentials, see error messages for invalid inputs, reset their password via email, and are locked out after 5 failed attempts..."
-                rows={6}
-                style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "#f0f0f0", padding: "0.75rem 1rem", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "sans-serif" }}
-              />
+              <textarea value={featureDesc} onChange={e => setFeatureDesc(e.target.value)} placeholder="Example: A login form with email and password fields..." rows={6} style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "#f0f0f0", padding: "0.75rem 1rem", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "sans-serif" }} />
               <button onClick={generateTests} disabled={testLoading || !featureDesc.trim()} style={{ padding: "0.75rem 1.5rem", borderRadius: "8px", background: testLoading || !featureDesc.trim() ? "#1a1a1a" : "#34d399", color: testLoading || !featureDesc.trim() ? "#555" : "#000", border: "none", cursor: testLoading || !featureDesc.trim() ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: 500, alignSelf: "flex-start" }}>
                 {testLoading ? "Generating test cases..." : "Generate Test Cases"}
               </button>
               {testOutput && (
                 <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "1.5rem", whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.7, color: "#f0f0f0" }}>
                   {testOutput}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeTab === "scripts" && (
+          <>
+            <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #222", background: "#111", display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#a78bfa" }}></div>
+              <strong>Selenium Script Generator</strong>
+              <span style={{ marginLeft: "auto", fontSize: "12px", color: "#555" }}>100% private · no cloud · eco friendly</span>
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1rem", overflowY: "auto" }}>
+              <div style={{ fontSize: "14px", color: "#888" }}>Describe what you want to automate:</div>
+              <textarea value={seleniumDesc} onChange={e => setSeleniumDesc(e.target.value)} placeholder="Example: A login form at https://the-internet.herokuapp.com/login with username 'tomsmith' and password 'SuperSecretPassword!'. Test valid login, invalid credentials, empty fields, and logout." rows={6} style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "#f0f0f0", padding: "0.75rem 1rem", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "sans-serif" }} />
+              <button onClick={generateSelenium} disabled={seleniumLoading || !seleniumDesc.trim()} style={{ padding: "0.75rem 1.5rem", borderRadius: "8px", background: seleniumLoading || !seleniumDesc.trim() ? "#1a1a1a" : "#a78bfa", color: seleniumLoading || !seleniumDesc.trim() ? "#555" : "#fff", border: "none", cursor: seleniumLoading || !seleniumDesc.trim() ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: 500, alignSelf: "flex-start" }}>
+                {seleniumLoading ? "Generating script..." : "Generate Selenium Script"}
+              </button>
+              {seleniumOutput && (
+                <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "1.5rem", whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.7, color: "#f0f0f0", fontFamily: "monospace" }}>
+                  {seleniumOutput}
                 </div>
               )}
             </div>
