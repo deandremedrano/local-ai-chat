@@ -110,7 +110,60 @@ def driver():
     yield driver
     driver.quit()
 
-Then write individual test functions for each test case. Make the scripts complete, production-ready, and include comments explaining each test. Always end with instructions on how to run the tests.`;
+Then write individual test functions for each test case. Make the scripts complete, production-ready, and include comments explaining each test. Only output the Python code, no explanations before or after.`;
+
+const BUG_REPORT_SYSTEM = `You are a senior QA engineer with 15 years of experience at Apple. You write professional, detailed bug reports that follow industry best practices.
+
+When given a bug description, generate a complete professional bug report in exactly this format:
+
+## Bug Report
+
+**Bug ID:** BUG-[random 4 digit number]
+**Date:** [today's date]
+**Reporter:** QA Engineer
+**Status:** Open
+
+---
+
+### Summary
+[One line description of the bug]
+
+### Environment
+- **OS:** [infer from context or list common options]
+- **Browser/App Version:** [infer or list]
+- **Device:** [infer or list]
+
+### Severity
+[Critical / High / Medium / Low] — [one line justification]
+
+### Priority
+[P1 / P2 / P3 / P4] — [one line justification]
+
+### Steps to Reproduce
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+
+### Expected Result
+[What should happen]
+
+### Actual Result
+[What actually happens]
+
+### Impact
+[Who is affected and how severely]
+
+### Possible Root Cause
+[Technical hypothesis about what might be causing this]
+
+### Recommended Fix
+[Suggested fix or area to investigate]
+
+### Attachments
+- [ ] Screenshot
+- [ ] Screen recording
+- [ ] Console logs
+- [ ] Network logs`;
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("chat");
@@ -129,6 +182,9 @@ export default function App() {
   const [seleniumDesc, setSeleniumDesc] = useState("");
   const [seleniumOutput, setSeleniumOutput] = useState("");
   const [seleniumLoading, setSeleniumLoading] = useState(false);
+  const [bugDesc, setBugDesc] = useState("");
+  const [bugOutput, setBugOutput] = useState("");
+  const [bugLoading, setBugLoading] = useState(false);
   const fileRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -183,24 +239,13 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const exportTests = () => {
-    if (!testOutput) return;
-    const blob = new Blob([testOutput], { type: "text/plain" });
+  const exportContent = (content, filename) => {
+    if (!content) return;
+    const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `test-cases-${Date.now()}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportSelenium = () => {
-    if (!seleniumOutput) return;
-    const blob = new Blob([seleniumOutput], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `test_script_${Date.now()}.py`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -255,6 +300,32 @@ export default function App() {
       setSeleniumOutput("Error generating script. Make sure Ollama is running.");
     }
     setSeleniumLoading(false);
+  };
+
+  const generateBugReport = async () => {
+    if (!bugDesc.trim() || bugLoading) return;
+    setBugLoading(true);
+    setBugOutput("");
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "mistral-nemo:latest",
+          messages: [
+            { role: "system", content: BUG_REPORT_SYSTEM },
+            { role: "user", content: `Generate a professional bug report for this issue:\n\n${bugDesc}` }
+          ],
+          stream: false
+        }),
+      });
+      const data = await res.json();
+      setBugOutput(data.message.content);
+    } catch (err) {
+      console.error(err);
+      setBugOutput("Error generating bug report. Make sure Ollama is running.");
+    }
+    setBugLoading(false);
   };
 
   const routeMessage = async (message) => {
@@ -315,10 +386,10 @@ export default function App() {
   };
 
   const tabStyle = (tab) => ({
-    padding: "0.5rem 0.75rem",
+    padding: "0.4rem 0.6rem",
     borderRadius: "6px",
     cursor: "pointer",
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: 500,
     background: activeTab === tab ? "#2563eb" : "transparent",
     color: activeTab === tab ? "#fff" : "#888",
@@ -328,10 +399,11 @@ export default function App() {
   return (
     <div style={{ display: "flex", height: "100vh", background: "#0f0f0f", color: "#f0f0f0", fontFamily: "sans-serif" }}>
       <div style={{ width: "220px", background: "#111", borderRight: "1px solid #222", display: "flex", flexDirection: "column", padding: "1rem 0" }}>
-        <div style={{ padding: "0 0.75rem 1rem", borderBottom: "1px solid #222", display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+        <div style={{ padding: "0 0.75rem 1rem", borderBottom: "1px solid #222", display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
           <button style={tabStyle("chat")} onClick={() => setActiveTab("chat")}>Chat</button>
           <button style={tabStyle("tests")} onClick={() => setActiveTab("tests")}>Tests</button>
           <button style={tabStyle("scripts")} onClick={() => setActiveTab("scripts")}>Scripts</button>
+          <button style={tabStyle("bugs")} onClick={() => setActiveTab("bugs")}>Bugs</button>
         </div>
 
         {activeTab === "chat" && (
@@ -376,7 +448,7 @@ export default function App() {
         {activeTab === "tests" && (
           <div style={{ flex: 1, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             <div style={{ fontSize: "12px", color: "#555" }}>Powered by Mistral Nemo</div>
-            <button onClick={exportTests} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "#1e1e1e", color: testOutput ? "#facc15" : "#333", border: "1px solid #333", cursor: testOutput ? "pointer" : "not-allowed", fontSize: "13px" }}>
+            <button onClick={() => exportContent(testOutput, `test-cases-${Date.now()}.md`)} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "#1e1e1e", color: testOutput ? "#facc15" : "#333", border: "1px solid #333", cursor: testOutput ? "pointer" : "not-allowed", fontSize: "13px" }}>
               Export as Markdown
             </button>
             <div style={{ fontSize: "11px", color: "#444", marginTop: "auto", textAlign: "center" }}>100% private · no cloud</div>
@@ -386,8 +458,18 @@ export default function App() {
         {activeTab === "scripts" && (
           <div style={{ flex: 1, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             <div style={{ fontSize: "12px", color: "#555" }}>Powered by Qwen2.5 Coder</div>
-            <button onClick={exportSelenium} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "#1e1e1e", color: seleniumOutput ? "#facc15" : "#333", border: "1px solid #333", cursor: seleniumOutput ? "pointer" : "not-allowed", fontSize: "13px" }}>
+            <button onClick={() => exportContent(seleniumOutput, `test_script_${Date.now()}.py`)} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "#1e1e1e", color: seleniumOutput ? "#facc15" : "#333", border: "1px solid #333", cursor: seleniumOutput ? "pointer" : "not-allowed", fontSize: "13px" }}>
               Export as .py file
+            </button>
+            <div style={{ fontSize: "11px", color: "#444", marginTop: "auto", textAlign: "center" }}>100% private · no cloud</div>
+          </div>
+        )}
+
+        {activeTab === "bugs" && (
+          <div style={{ flex: 1, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div style={{ fontSize: "12px", color: "#555" }}>Powered by Mistral Nemo</div>
+            <button onClick={() => exportContent(bugOutput, `bug-report-${Date.now()}.md`)} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "#1e1e1e", color: bugOutput ? "#facc15" : "#333", border: "1px solid #333", cursor: bugOutput ? "pointer" : "not-allowed", fontSize: "13px" }}>
+              Export as Markdown
             </button>
             <div style={{ fontSize: "11px", color: "#444", marginTop: "auto", textAlign: "center" }}>100% private · no cloud</div>
           </div>
@@ -475,13 +557,35 @@ export default function App() {
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1rem", overflowY: "auto" }}>
               <div style={{ fontSize: "14px", color: "#888" }}>Describe what you want to automate:</div>
-              <textarea value={seleniumDesc} onChange={e => setSeleniumDesc(e.target.value)} placeholder="Example: A login form at https://the-internet.herokuapp.com/login with username 'tomsmith' and password 'SuperSecretPassword!'. Test valid login, invalid credentials, empty fields, and logout." rows={6} style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "#f0f0f0", padding: "0.75rem 1rem", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "sans-serif" }} />
+              <textarea value={seleniumDesc} onChange={e => setSeleniumDesc(e.target.value)} placeholder="Example: A login form at https://the-internet.herokuapp.com/login..." rows={6} style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "#f0f0f0", padding: "0.75rem 1rem", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "sans-serif" }} />
               <button onClick={generateSelenium} disabled={seleniumLoading || !seleniumDesc.trim()} style={{ padding: "0.75rem 1.5rem", borderRadius: "8px", background: seleniumLoading || !seleniumDesc.trim() ? "#1a1a1a" : "#a78bfa", color: seleniumLoading || !seleniumDesc.trim() ? "#555" : "#fff", border: "none", cursor: seleniumLoading || !seleniumDesc.trim() ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: 500, alignSelf: "flex-start" }}>
                 {seleniumLoading ? "Generating script..." : "Generate Selenium Script"}
               </button>
               {seleniumOutput && (
                 <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "1.5rem", whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.7, color: "#f0f0f0", fontFamily: "monospace" }}>
                   {seleniumOutput}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeTab === "bugs" && (
+          <>
+            <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #222", background: "#111", display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#f87171" }}></div>
+              <strong>Bug Report Generator</strong>
+              <span style={{ marginLeft: "auto", fontSize: "12px", color: "#555" }}>100% private · no cloud · eco friendly</span>
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1rem", overflowY: "auto" }}>
+              <div style={{ fontSize: "14px", color: "#888" }}>Describe the bug you found:</div>
+              <textarea value={bugDesc} onChange={e => setBugDesc(e.target.value)} placeholder="Example: When clicking the submit button on the login form with valid credentials, nothing happens. No error message appears and the user is not redirected. This occurs on Chrome 120 on macOS." rows={6} style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: "8px", color: "#f0f0f0", padding: "0.75rem 1rem", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "sans-serif" }} />
+              <button onClick={generateBugReport} disabled={bugLoading || !bugDesc.trim()} style={{ padding: "0.75rem 1.5rem", borderRadius: "8px", background: bugLoading || !bugDesc.trim() ? "#1a1a1a" : "#f87171", color: bugLoading || !bugDesc.trim() ? "#555" : "#fff", border: "none", cursor: bugLoading || !bugDesc.trim() ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: 500, alignSelf: "flex-start" }}>
+                {bugLoading ? "Generating bug report..." : "Generate Bug Report"}
+              </button>
+              {bugOutput && (
+                <div style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "1.5rem", whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.7, color: "#f0f0f0" }}>
+                  {bugOutput}
                 </div>
               )}
             </div>
