@@ -9,23 +9,23 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 const API_URL = "http://localhost:11434/api/chat";
 
 const AGENTS = {
-  coding: { name: "Coding Agent", model: "qwen2.5-coder:latest", color: "#a78bfa", icon: "⌨️" },
-  qa: { name: "QA Agent", model: "mistral-nemo:latest", color: "#34d399", icon: "🧪" },
-  resume: { name: "Career Agent", model: "mistral-nemo:latest", color: "#fbbf24", icon: "💼" },
-  general: { name: "General Agent", model: "mistral:latest", color: "#60a5fa", icon: "🤖" }
+  coding: { name: "Coding", model: "qwen2.5-coder:latest", color: "#0a84ff" },
+  qa: { name: "QA", model: "mistral-nemo:latest", color: "#30d158" },
+  resume: { name: "Career", model: "mistral-nemo:latest", color: "#ffd60a" },
+  general: { name: "General", model: "mistral:latest", color: "#636366" }
 };
 
 const AGENT_SYSTEMS = {
-  coding: "You are an expert software engineer and coding specialist. Help with writing, debugging, and explaining code. Be concise and always include code examples.",
-  qa: "You are an expert QA engineer with 15 years of experience at top tech companies including Apple. You specialize in test planning, test automation, bug reporting, and QA methodologies.",
-  resume: "You are an expert career coach and resume specialist with deep knowledge of the tech industry. Give honest, accurate, personalized career advice based only on what the user shares.",
+  coding: "You are an expert software engineer. Help with writing, debugging, and explaining code. Be concise and include code examples.",
+  qa: "You are an expert QA engineer with 15 years of experience at top tech companies including Apple. Specialize in test planning, automation, bug reporting, and QA methodologies.",
+  resume: "You are an expert career coach with deep knowledge of the tech industry. Give honest, accurate, personalized career advice based only on what the user shares.",
   general: "You are a helpful, intelligent, and concise AI assistant. Answer questions clearly and accurately."
 };
 
 const ROUTER_MODEL = "llama3.1:8b";
-const ROUTER_PROMPT = `You are a routing agent. Reply with ONLY one word: coding, qa, resume, or general.
+const ROUTER_PROMPT = `Reply with ONLY one word: coding, qa, resume, or general.
 - coding: programming, code, debugging
-- qa: quality assurance, testing, bug reports
+- qa: quality assurance, testing, bug reports  
 - resume: career advice, job search, interview prep
 - general: everything else
 User message: `;
@@ -136,7 +136,7 @@ Format exactly like this:
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("chat");
-  const [chats, setChats] = useState([{ id: 1, name: "New Chat", messages: [] }]);
+  const [chats, setChats] = useState([{ id: 1, name: "New Conversation", messages: [] }]);
   const [activeChatId, setActiveChatId] = useState(1);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -167,6 +167,7 @@ export default function App() {
   const [pipelineBug, setPipelineBug] = useState("");
   const fileRef = useRef(null);
   const bottomRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = activeChat?.messages || [];
@@ -177,20 +178,16 @@ export default function App() {
 
   const newChat = () => {
     const id = Date.now();
-    setChats(prev => [...prev, { id, name: "New Chat", messages: [] }]);
+    setChats(prev => [...prev, { id, name: "New Conversation", messages: [] }]);
     setActiveChatId(id);
-    setDocText("");
-    setDocName("");
-    setCurrentAgent(null);
-    setStreamingContent("");
-    setStatus("");
+    setDocText(""); setDocName("");
+    setCurrentAgent(null); setStreamingContent(""); setStatus("");
   };
 
   const handleFile = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setDocName(file.name);
-    setDocLoading(true);
+    setDocName(file.name); setDocLoading(true);
     if (file.type === "application/pdf") {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -214,9 +211,7 @@ export default function App() {
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
+    a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -226,30 +221,20 @@ export default function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
-        messages: [
-          ...(system ? [{ role: "system", content: system }] : []),
-          { role: "user", content: userMessage }
-        ],
+        messages: [...(system ? [{ role: "system", content: system }] : []), { role: "user", content: userMessage }],
         stream: true
       }),
     });
-
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let fullContent = "";
-
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value);
-      const lines = chunk.split("\n").filter(l => l.trim());
-      for (const line of lines) {
+      for (const line of decoder.decode(value).split("\n").filter(l => l.trim())) {
         try {
           const data = JSON.parse(line);
-          if (data.message?.content) {
-            fullContent += data.message.content;
-            onChunk(fullContent);
-          }
+          if (data.message?.content) { fullContent += data.message.content; onChunk(fullContent); }
         } catch {}
       }
     }
@@ -262,386 +247,413 @@ export default function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
-        messages: [
-          ...(system ? [{ role: "system", content: system }] : []),
-          { role: "user", content: userMessage }
-        ],
+        messages: [...(system ? [{ role: "system", content: system }] : []), { role: "user", content: userMessage }],
         stream: false
       }),
     });
-    const data = await res.json();
-    return data.message.content;
+    return (await res.json()).message.content;
   };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
-    const userMessage = { role: "user", content: input };
-    const updated = [...messages, userMessage];
-    setChats(prev => prev.map(c => c.id === activeChatId ? {
-      ...c,
-      name: c.messages.length === 0 ? input.slice(0, 30) : c.name,
-      messages: updated
-    } : c));
-    setInput("");
-    setLoading(true);
-    setStreamingContent("");
-    setCurrentAgent(null);
-
+    const userMsg = { role: "user", content: input };
+    const updated = [...messages, userMsg];
+    setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, name: c.messages.length === 0 ? input.slice(0, 45) : c.name, messages: updated } : c));
+    setInput(""); setLoading(true); setStreamingContent(""); setCurrentAgent(null);
+    if (textareaRef.current) textareaRef.current.style.height = "22px";
     try {
-      setStatus("🔀 Analyzing your message...");
+      setStatus("Routing…");
       const route = manualAgent !== "auto" ? manualAgent : await (async () => {
         const r = await callAI(ROUTER_MODEL, "", ROUTER_PROMPT + input);
         return AGENTS[r.trim().toLowerCase()] ? r.trim().toLowerCase() : "general";
       })();
-
       const agent = AGENTS[route];
       setCurrentAgent(route);
-      setStatus(`${agent.icon} ${agent.name} is thinking...`);
-
-      const docContext = docText ? `\n\nUploaded document "${docName}":\n\n${docText.slice(0, 8000)}` : "";
-
-      const fullContent = await streamAI(
-        agent.model,
-        AGENT_SYSTEMS[route] + docContext,
-        input,
-        (content) => setStreamingContent(content)
-      );
-
-      setStatus("✅ Done!");
-      setTimeout(() => setStatus(""), 2000);
-
-      const reply = { role: "assistant", content: fullContent, agent: agent.name, color: agent.color };
-      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: [...updated, reply] } : c));
+      setStatus(`${agent.name} is responding…`);
+      const docContext = docText ? `\n\nAttached document "${docName}":\n\n${docText.slice(0, 8000)}` : "";
+      const fullContent = await streamAI(agent.model, AGENT_SYSTEMS[route] + docContext, input, setStreamingContent);
+      setStatus("");
+      setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, messages: [...updated, { role: "assistant", content: fullContent, agent: route }] } : c));
       setStreamingContent("");
-    } catch (err) {
-      console.error(err);
-      setStatus("❌ Error — make sure Ollama is running");
-    }
+    } catch { setStatus("Connection error — is Ollama running?"); }
     setLoading(false);
   };
 
-  const generateWithStream = async (model, system, prompt, setOutput, setLoadingState, setStatusState, statusMessages) => {
-    setLoadingState(true);
-    setOutput("");
-    setStatusState(statusMessages[0]);
+  const generateWithStream = async (model, system, prompt, setOut, setLoad, setStat, s1, s2, s3) => {
+    setLoad(true); setOut(""); setStat(s1);
     try {
-      await streamAI(model, system, prompt, (content) => {
-        setOutput(content);
-        if (content.length > 100 && content.length < 200) setStatusState(statusMessages[1]);
-        if (content.length > 500) setStatusState(statusMessages[2]);
-      });
-      setStatusState("✅ Done!");
-      setTimeout(() => setStatusState(""), 2000);
-    } catch (err) {
-      setStatusState("❌ Error — make sure Ollama is running");
-    }
-    setLoadingState(false);
+      await streamAI(model, system, prompt, (c) => { setOut(c); if (c.length > 200) setStat(s2); if (c.length > 800) setStat(s3); });
+      setStat("Done"); setTimeout(() => setStat(""), 1500);
+    } catch { setStat("Error — is Ollama running?"); }
+    setLoad(false);
   };
 
   const runPipeline = async () => {
     if (!pipelineDesc.trim() || pipelineLoading) return;
-    setPipelineLoading(true);
-    setPipelineTests("");
-    setPipelineScript("");
-    setPipelineBug("");
-
+    setPipelineLoading(true); setPipelineTests(""); setPipelineScript(""); setPipelineBug("");
     try {
-      setPipelineStep("🧪 Step 1 of 3 — Generating test cases...");
-      const tests = await streamAI("mistral-nemo:latest", TEST_GEN_SYSTEM, `Generate test cases for:\n\n${pipelineDesc}`, setPipelineTests);
-
-      setPipelineStep("⌨️ Step 2 of 3 — Writing Selenium script...");
-      const script = await streamAI("qwen2.5-coder:latest", SELENIUM_SYSTEM, `Generate Selenium script for:\n\n${pipelineDesc}`, setPipelineScript);
-
-      setPipelineStep("🐛 Step 3 of 3 — Creating bug report template...");
-      const bug = await streamAI("mistral-nemo:latest", BUG_REPORT_SYSTEM, `Generate bug report template for:\n\n${pipelineDesc}`, setPipelineBug);
-
-      setPipelineStep("✅ Pipeline complete!");
-      setTimeout(() => setPipelineStep(""), 3000);
-    } catch (err) {
-      setPipelineStep("❌ Error — make sure Ollama is running");
-    }
+      setPipelineStep("Generating test cases…");
+      await streamAI("mistral-nemo:latest", TEST_GEN_SYSTEM, `Generate test cases for:\n\n${pipelineDesc}`, setPipelineTests);
+      setPipelineStep("Writing Selenium script…");
+      await streamAI("qwen2.5-coder:latest", SELENIUM_SYSTEM, `Generate Selenium script for:\n\n${pipelineDesc}`, setPipelineScript);
+      setPipelineStep("Creating bug report template…");
+      await streamAI("mistral-nemo:latest", BUG_REPORT_SYSTEM, `Generate bug report template for:\n\n${pipelineDesc}`, setPipelineBug);
+      setPipelineStep("Complete"); setTimeout(() => setPipelineStep(""), 2000);
+    } catch { setPipelineStep("Error — is Ollama running?"); }
     setPipelineLoading(false);
   };
 
-  const tabs = [
-    { id: "chat", label: "Chat", color: "#4ade80" },
-    { id: "tests", label: "Tests", color: "#34d399" },
-    { id: "scripts", label: "Scripts", color: "#a78bfa" },
-    { id: "bugs", label: "Bugs", color: "#f87171" },
-    { id: "pipeline", label: "Pipeline", color: "#facc15" }
-  ];
+  const handleKeyDown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+  const handleInput = (e) => {
+    setInput(e.target.value);
+    e.target.style.height = "22px";
+    e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px";
+  };
 
-  const tabStyle = (tab) => ({
-    padding: "0.4rem 0.6rem",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "11px",
-    fontWeight: 600,
-    background: activeTab === tab.id ? tab.color + "22" : "transparent",
-    color: activeTab === tab.id ? tab.color : "#555",
-    border: activeTab === tab.id ? `1px solid ${tab.color}44` : "1px solid transparent",
-    transition: "all 0.2s"
-  });
-
-  const cardStyle = { background: "#161616", border: "1px solid #2a2a2a", borderRadius: "12px", padding: "1.5rem", whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.8, color: "#e0e0e0" };
-
-  const btnStyle = (color, disabled) => ({
-    padding: "0.75rem 1.5rem",
-    borderRadius: "8px",
-    background: disabled ? "#1a1a1a" : color,
-    color: disabled ? "#444" : "#fff",
-    border: "none",
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontSize: "14px",
-    fontWeight: 600,
-    alignSelf: "flex-start",
-    transition: "opacity 0.2s"
-  });
-
-  const inputStyle = { background: "#161616", border: "1px solid #2a2a2a", borderRadius: "8px", color: "#f0f0f0", padding: "0.75rem 1rem", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "sans-serif", width: "100%", boxSizing: "border-box" };
+  const TABS = ["Chat", "Tests", "Scripts", "Bugs", "Pipeline"];
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#0a0a0a", color: "#f0f0f0", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <div style={{ width: "240px", background: "#111", borderRight: "1px solid #1e1e1e", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "1.25rem 1rem 1rem", borderBottom: "1px solid #1e1e1e" }}>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: "#fff", marginBottom: "0.75rem", letterSpacing: "0.05em" }}>LOCAL AI SUITE</div>
-          <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
-            {tabs.map(tab => (
-              <button key={tab.id} style={tabStyle(tab)} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>
-            ))}
+    <div style={{ display: "flex", height: "100vh", background: "#1c1c1e", fontFamily: "-apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif", color: "#f5f5f7" }}>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.4)} }
+        ::-webkit-scrollbar { width: 0px; }
+        textarea::placeholder { color: #48484a; }
+        input::placeholder { color: #48484a; }
+        button { -webkit-tap-highlight-color: transparent; }
+      `}</style>
+
+      {/* Sidebar */}
+      <div style={{ width: "252px", background: "#161618", borderRight: "0.5px solid #2c2c2e", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        
+        {/* App header */}
+        <div style={{ padding: "20px 16px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px" }}>
+            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "linear-gradient(135deg, #0a84ff, #5e5ce6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px" }}>◎</div>
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "#f5f5f7", letterSpacing: "-0.01em" }}>AI Suite</div>
+              <div style={{ fontSize: "10px", color: "#48484a", letterSpacing: "0.02em" }}>Private · Local</div>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+            {TABS.map(t => {
+              const id = t.toLowerCase();
+              const active = activeTab === id;
+              return (
+                <button key={id} onClick={() => setActiveTab(id)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "7px 10px", borderRadius: "8px", background: active ? "rgba(255,255,255,0.07)" : "transparent", border: "none", cursor: "pointer", textAlign: "left", width: "100%", transition: "background 0.15s" }}>
+                  <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: active ? "#0a84ff" : "#3a3a3c", flexShrink: 0 }} />
+                  <span style={{ fontSize: "13px", color: active ? "#f5f5f7" : "#8e8e93", fontWeight: active ? 500 : 400 }}>{t}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
+        <div style={{ height: "0.5px", background: "#2c2c2e", margin: "0 16px" }} />
+
+        {/* Chat list */}
         {activeTab === "chat" && (
           <>
-            <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #1e1e1e" }}>
-              <button onClick={newChat} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "linear-gradient(135deg, #2563eb, #7c3aed)", color: "#fff", border: "none", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>
-                + New Chat
+            <div style={{ padding: "12px 16px 6px" }}>
+              <button onClick={newChat} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", borderRadius: "8px", background: "transparent", border: "none", cursor: "pointer", color: "#0a84ff", fontSize: "13px", fontWeight: 500, width: "100%" }}>
+                <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> New Conversation
               </button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "0.5rem" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px" }}>
               {chats.map(c => (
-                <div key={c.id} onClick={() => setActiveChatId(c.id)} style={{ padding: "0.6rem 0.75rem", borderRadius: "8px", cursor: "pointer", fontSize: "13px", marginBottom: "2px", background: c.id === activeChatId ? "#1e1e1e" : "transparent", color: c.id === activeChatId ? "#fff" : "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", borderLeft: c.id === activeChatId ? "2px solid #2563eb" : "2px solid transparent" }}>
+                <button key={c.id} onClick={() => setActiveChatId(c.id)} style={{ display: "block", width: "100%", padding: "8px 10px", borderRadius: "8px", background: c.id === activeChatId ? "rgba(255,255,255,0.06)" : "transparent", border: "none", cursor: "pointer", textAlign: "left", color: c.id === activeChatId ? "#f5f5f7" : "#8e8e93", fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: "1px", transition: "all 0.15s" }}>
                   {c.name}
-                </div>
+                </button>
               ))}
             </div>
-            <div style={{ padding: "1rem", borderTop: "1px solid #1e1e1e", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <div style={{ fontSize: "10px", color: "#444", fontWeight: 600, letterSpacing: "0.08em", marginBottom: "2px" }}>AGENT MODE</div>
-              <select value={manualAgent} onChange={e => setManualAgent(e.target.value)} style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", background: "#1a1a1a", color: "#4ade80", border: "1px solid #2a2a2a", fontSize: "12px", outline: "none" }}>
-                <option value="auto">🔀 Auto Route</option>
-                <option value="coding">⌨️ Coding Agent</option>
-                <option value="qa">🧪 QA Agent</option>
-                <option value="resume">💼 Career Agent</option>
-                <option value="general">🤖 General Agent</option>
+          </>
+        )}
+
+        {activeTab !== "chat" && <div style={{ flex: 1 }} />}
+
+        {/* Footer controls */}
+        <div style={{ padding: "12px 16px 20px", borderTop: "0.5px solid #2c2c2e" }}>
+          {activeTab === "chat" && (
+            <>
+              <div style={{ fontSize: "10px", color: "#48484a", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "8px" }}>Agent</div>
+              <select value={manualAgent} onChange={e => setManualAgent(e.target.value)} style={{ width: "100%", padding: "7px 10px", borderRadius: "8px", background: "#2c2c2e", color: "#f5f5f7", border: "none", fontSize: "13px", outline: "none", marginBottom: "8px", appearance: "none" }}>
+                <option value="auto">Auto Route</option>
+                <option value="coding">Coding</option>
+                <option value="qa">QA</option>
+                <option value="resume">Career</option>
+                <option value="general">General</option>
               </select>
-              <button onClick={() => fileRef.current.click()} style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", background: "#1a1a1a", color: docName ? "#4ade80" : "#555", border: "1px solid #2a2a2a", cursor: "pointer", fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {docLoading ? "Reading..." : docName ? `📄 ${docName}` : "📎 Upload Document"}
+              <button onClick={() => fileRef.current.click()} style={{ display: "block", width: "100%", padding: "7px 10px", borderRadius: "8px", background: "transparent", border: "0.5px solid #3a3a3c", color: docName ? "#30d158" : "#8e8e93", fontSize: "13px", cursor: "pointer", textAlign: "left", marginBottom: "6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {docLoading ? "Reading…" : docName ? `📄 ${docName}` : "Attach Document"}
               </button>
-              {docName && <button onClick={() => { setDocText(""); setDocName(""); }} style={{ width: "100%", padding: "0.4rem", borderRadius: "6px", background: "transparent", color: "#444", border: "1px solid #1e1e1e", cursor: "pointer", fontSize: "11px" }}>Remove</button>}
-              <button onClick={() => exportContent(messages.map(m => `${m.role === "user" ? "You" : m.agent || "AI"}: ${m.content}`).join("\n\n"), `chat-${Date.now()}.txt`)} style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", background: "#1a1a1a", color: messages.length > 0 ? "#facc15" : "#333", border: "1px solid #2a2a2a", cursor: messages.length > 0 ? "pointer" : "not-allowed", fontSize: "12px" }}>
-                💾 Export Chat
+              {docName && (
+                <button onClick={() => { setDocText(""); setDocName(""); }} style={{ display: "block", width: "100%", padding: "6px 10px", borderRadius: "8px", background: "transparent", border: "none", color: "#48484a", fontSize: "12px", cursor: "pointer", textAlign: "left", marginBottom: "6px" }}>
+                  Remove attachment
+                </button>
+              )}
+              <button onClick={() => exportContent(messages.map(m => `${m.role === "user" ? "You" : AGENTS[m.agent]?.name || "AI"}: ${m.content}`).join("\n\n"), `conversation-${Date.now()}.txt`)} style={{ display: "block", width: "100%", padding: "7px 10px", borderRadius: "8px", background: "transparent", border: "0.5px solid #3a3a3c", color: "#8e8e93", fontSize: "13px", cursor: "pointer", textAlign: "left" }}>
+                Export Conversation
               </button>
               <input ref={fileRef} type="file" accept=".txt,.md,.csv,.json,.pdf" onChange={handleFile} style={{ display: "none" }} />
-            </div>
-          </>
-        )}
-
-        {activeTab !== "chat" && (
-          <div style={{ flex: 1, padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {activeTab === "tests" && <div style={{ fontSize: "11px", color: "#555" }}>Powered by Mistral Nemo 12B</div>}
-            {activeTab === "scripts" && <div style={{ fontSize: "11px", color: "#555" }}>Powered by Qwen2.5 Coder</div>}
-            {activeTab === "bugs" && <div style={{ fontSize: "11px", color: "#555" }}>Powered by Mistral Nemo 12B</div>}
-            {activeTab === "pipeline" && <div style={{ fontSize: "11px", color: "#555" }}>3 models · full pipeline</div>}
+            </>
+          )}
+          {activeTab !== "chat" && (
             <button onClick={() => {
               if (activeTab === "tests") exportContent(testOutput, `test-cases-${Date.now()}.md`);
-              if (activeTab === "scripts") exportContent(seleniumOutput, `test_script_${Date.now()}.py`);
+              if (activeTab === "scripts") exportContent(seleniumOutput, `test_${Date.now()}.py`);
               if (activeTab === "bugs") exportContent(bugOutput, `bug-report-${Date.now()}.md`);
-              if (activeTab === "pipeline") exportContent(`# QA Pipeline\n\n${pipelineTests}\n\n---\n\n${pipelineScript}\n\n---\n\n${pipelineBug}`, `qa-pipeline-${Date.now()}.md`);
-            }} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", background: "#1a1a1a", color: "#facc15", border: "1px solid #2a2a2a", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
-              💾 Export
+              if (activeTab === "pipeline") exportContent(`# QA Pipeline\n\n${pipelineTests}\n\n---\n\n${pipelineScript}\n\n---\n\n${pipelineBug}`, `pipeline-${Date.now()}.md`);
+            }} style={{ display: "block", width: "100%", padding: "7px 10px", borderRadius: "8px", background: "transparent", border: "0.5px solid #3a3a3c", color: "#8e8e93", fontSize: "13px", cursor: "pointer", textAlign: "left" }}>
+              Export Output
             </button>
-            <div style={{ fontSize: "10px", color: "#333", marginTop: "auto", textAlign: "center" }}>100% private · no cloud</div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
+      {/* Main content */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+
         {activeTab === "chat" && (
           <>
-            <div style={{ padding: "0.875rem 1.5rem", borderBottom: "1px solid #1e1e1e", background: "#0f0f0f", display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: currentAgent ? AGENTS[currentAgent]?.color : "#4ade80", boxShadow: `0 0 8px ${currentAgent ? AGENTS[currentAgent]?.color : "#4ade80"}` }}></div>
-              <span style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>
-                {currentAgent ? `${AGENTS[currentAgent].icon} ${AGENTS[currentAgent].name}` : "Local AI Suite"}
-              </span>
-              {status && <span style={{ fontSize: "12px", color: "#facc15", marginLeft: "4px" }}>{status}</span>}
-              {docName && <span style={{ fontSize: "11px", color: "#4ade80", marginLeft: "auto", background: "#4ade9922", padding: "2px 8px", borderRadius: "4px" }}>📄 {docName}</span>}
-              {!docName && <span style={{ marginLeft: "auto", fontSize: "11px", color: "#333" }}>private · local · eco friendly</span>}
+            {/* Topbar */}
+            <div style={{ height: "52px", borderBottom: "0.5px solid #2c2c2e", display: "flex", alignItems: "center", padding: "0 24px", gap: "10px", background: "#1c1c1e", flexShrink: 0 }}>
+              {currentAgent ? (
+                <>
+                  <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: AGENTS[currentAgent].color, boxShadow: `0 0 6px ${AGENTS[currentAgent].color}` }} />
+                  <span style={{ fontSize: "13px", color: "#f5f5f7", fontWeight: 500 }}>{AGENTS[currentAgent].name} Agent</span>
+                  {status && <span style={{ fontSize: "12px", color: "#48484a" }}>— {status}</span>}
+                </>
+              ) : (
+                <>
+                  <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#0a84ff" }} />
+                  <span style={{ fontSize: "13px", color: "#8e8e93" }}>
+                    {status || "Ready"}
+                  </span>
+                </>
+              )}
+              {docName && (
+                <div style={{ marginLeft: "auto", fontSize: "11px", color: "#30d158", background: "rgba(48,209,88,0.08)", padding: "3px 10px", borderRadius: "6px", border: "0.5px solid rgba(48,209,88,0.2)" }}>
+                  {docName}
+                </div>
+              )}
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              {messages.length === 0 && !loading && (
-                <div style={{ textAlign: "center", marginTop: "5rem" }}>
-                  <div style={{ fontSize: "28px", marginBottom: "0.5rem" }}>🤖</div>
-                  <div style={{ fontSize: "20px", fontWeight: 700, color: "#fff", marginBottom: "0.5rem" }}>Local AI Suite</div>
-                  <div style={{ fontSize: "13px", color: "#444", marginBottom: "2rem" }}>Multi-agent system · 100% private · runs on your Mac</div>
-                  <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
-                    {Object.entries(AGENTS).map(([key, agent]) => (
-                      <div key={key} style={{ padding: "0.5rem 1rem", borderRadius: "20px", border: `1px solid ${agent.color}44`, color: agent.color, fontSize: "12px", background: agent.color + "11" }}>
-                        {agent.icon} {agent.name}
+            {/* Messages */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "32px 0" }}>
+              <div style={{ maxWidth: "720px", margin: "0 auto", padding: "0 24px", display: "flex", flexDirection: "column", gap: "24px" }}>
+                {messages.length === 0 && !loading && (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", gap: "20px", animation: "fadeIn 0.4s ease" }}>
+                    <div style={{ width: "52px", height: "52px", borderRadius: "16px", background: "linear-gradient(135deg, #0a84ff22, #5e5ce622)", border: "0.5px solid #3a3a3c", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "22px" }}>◎</div>
+                    <div style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: "17px", fontWeight: 600, color: "#f5f5f7", marginBottom: "6px", letterSpacing: "-0.02em" }}>AI Suite</div>
+                      <div style={{ fontSize: "13px", color: "#48484a", lineHeight: 1.5 }}>Private AI assistant · Runs on your Mac · No cloud</div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
+                      {Object.entries(AGENTS).map(([key, a]) => (
+                        <div key={key} style={{ padding: "5px 12px", borderRadius: "20px", border: `0.5px solid ${a.color}44`, color: a.color, fontSize: "12px", background: a.color + "0d", letterSpacing: "0.01em" }}>
+                          {a.name}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {messages.map((m, i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", gap: "5px", animation: "fadeIn 0.2s ease" }}>
+                    {m.role === "assistant" && m.agent && (
+                      <div style={{ fontSize: "11px", color: AGENTS[m.agent]?.color || "#8e8e93", fontWeight: 500, letterSpacing: "0.03em", paddingLeft: "2px", textTransform: "uppercase" }}>
+                        {AGENTS[m.agent]?.name}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {messages.map((m, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", gap: "4px" }}>
-                  {m.agent && (
-                    <div style={{ fontSize: "11px", color: m.color || "#555", paddingLeft: "4px", fontWeight: 600 }}>
-                      {AGENTS[Object.keys(AGENTS).find(k => AGENTS[k].name === m.agent)]?.icon} {m.agent}
+                    )}
+                    {m.role === "user" && (
+                      <div style={{ fontSize: "11px", color: "#48484a", paddingRight: "2px", textTransform: "uppercase", letterSpacing: "0.03em" }}>You</div>
+                    )}
+                    <div style={{
+                      maxWidth: "80%",
+                      padding: m.role === "user" ? "11px 16px" : "14px 18px",
+                      borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
+                      background: m.role === "user" ? "#0a84ff" : "#2c2c2e",
+                      color: "#f5f5f7",
+                      fontSize: "14px",
+                      lineHeight: 1.65,
+                      whiteSpace: "pre-wrap",
+                      letterSpacing: "-0.01em"
+                    }}>
+                      {m.content}
                     </div>
-                  )}
-                  <div style={{ maxWidth: "72%", padding: "0.875rem 1.125rem", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "4px 18px 18px 18px", background: m.role === "user" ? "linear-gradient(135deg, #2563eb, #7c3aed)" : "#161616", border: m.role === "assistant" ? "1px solid #2a2a2a" : "none", lineHeight: 1.7, fontSize: "14px", color: "#f0f0f0", whiteSpace: "pre-wrap" }}>
-                    {m.content}
                   </div>
-                </div>
-              ))}
+                ))}
 
-              {loading && streamingContent && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
-                  {currentAgent && (
-                    <div style={{ fontSize: "11px", color: AGENTS[currentAgent]?.color, paddingLeft: "4px", fontWeight: 600 }}>
-                      {AGENTS[currentAgent]?.icon} {AGENTS[currentAgent]?.name}
+                {loading && streamingContent && (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "5px", animation: "fadeIn 0.2s ease" }}>
+                    {currentAgent && (
+                      <div style={{ fontSize: "11px", color: AGENTS[currentAgent]?.color, fontWeight: 500, letterSpacing: "0.03em", paddingLeft: "2px", textTransform: "uppercase" }}>
+                        {AGENTS[currentAgent]?.name}
+                      </div>
+                    )}
+                    <div style={{ maxWidth: "80%", padding: "14px 18px", borderRadius: "4px 18px 18px 18px", background: "#2c2c2e", color: "#f5f5f7", fontSize: "14px", lineHeight: 1.65, whiteSpace: "pre-wrap", letterSpacing: "-0.01em" }}>
+                      {streamingContent}
+                      <span style={{ display: "inline-block", width: "1.5px", height: "14px", background: "#0a84ff", marginLeft: "2px", animation: "blink 0.7s infinite", verticalAlign: "text-bottom", borderRadius: "1px" }} />
                     </div>
-                  )}
-                  <div style={{ maxWidth: "72%", padding: "0.875rem 1.125rem", borderRadius: "4px 18px 18px 18px", background: "#161616", border: "1px solid #2a2a2a", lineHeight: 1.7, fontSize: "14px", color: "#f0f0f0", whiteSpace: "pre-wrap" }}>
-                    {streamingContent}<span style={{ display: "inline-block", width: "2px", height: "14px", background: "#4ade80", marginLeft: "2px", animation: "blink 1s infinite", verticalAlign: "text-bottom" }} />
                   </div>
-                </div>
-              )}
+                )}
 
-              {loading && !streamingContent && (
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-                  <div style={{ padding: "0.875rem 1.125rem", borderRadius: "4px 18px 18px 18px", background: "#161616", border: "1px solid #2a2a2a", color: "#555", fontSize: "14px" }}>
-                    <span style={{ display: "inline-flex", gap: "4px" }}>
-                      <span style={{ animation: "bounce 1s infinite 0s" }}>●</span>
-                      <span style={{ animation: "bounce 1s infinite 0.2s" }}>●</span>
-                      <span style={{ animation: "bounce 1s infinite 0.4s" }}>●</span>
-                    </span>
+                {loading && !streamingContent && (
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "5px", flexDirection: "column" }}>
+                    {currentAgent && <div style={{ fontSize: "11px", color: AGENTS[currentAgent]?.color, fontWeight: 500, letterSpacing: "0.03em", paddingLeft: "2px", textTransform: "uppercase" }}>{AGENTS[currentAgent]?.name}</div>}
+                    <div style={{ padding: "14px 18px", borderRadius: "4px 18px 18px 18px", background: "#2c2c2e", display: "flex", gap: "5px", alignItems: "center" }}>
+                      {[0, 0.18, 0.36].map((d, i) => (
+                        <div key={i} style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#48484a", animation: `pulse 1.2s infinite ${d}s` }} />
+                      ))}
+                    </div>
                   </div>
+                )}
+                <div ref={bottomRef} />
+              </div>
+            </div>
+
+            {/* Input */}
+            <div style={{ padding: "12px 24px 20px", background: "#1c1c1e", flexShrink: 0 }}>
+              <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: "10px", background: "#2c2c2e", borderRadius: "16px", padding: "10px 10px 10px 16px", border: "0.5px solid #3a3a3c" }}>
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={handleInput}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Message AI Suite…"
+                    rows={1}
+                    style={{ flex: 1, background: "transparent", border: "none", color: "#f5f5f7", fontSize: "14px", outline: "none", resize: "none", fontFamily: "inherit", lineHeight: 1.6, height: "22px", letterSpacing: "-0.01em" }}
+                  />
+                  <button onClick={sendMessage} disabled={loading || !input.trim()} style={{ width: "32px", height: "32px", borderRadius: "10px", background: (!loading && input.trim()) ? "#0a84ff" : "#3a3a3c", color: (!loading && input.trim()) ? "#fff" : "#48484a", border: "none", cursor: (!loading && input.trim()) ? "pointer" : "not-allowed", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}>
+                    ↑
+                  </button>
                 </div>
-              )}
-              <div ref={bottomRef} />
-            </div>
-
-            <div style={{ padding: "1rem 1.5rem", borderTop: "1px solid #1e1e1e", background: "#0f0f0f", display: "flex", gap: "0.75rem", alignItems: "flex-end" }}>
-              <textarea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder="Ask anything — press Enter to send, Shift+Enter for new line..."
-                rows={1}
-                style={{ flex: 1, padding: "0.875rem 1rem", borderRadius: "12px", border: "1px solid #2a2a2a", background: "#161616", color: "#f0f0f0", fontSize: "14px", outline: "none", resize: "none", fontFamily: "inherit", lineHeight: 1.5 }}
-              />
-              <button onClick={sendMessage} disabled={loading} style={{ padding: "0.875rem 1.25rem", borderRadius: "12px", background: loading ? "#1a1a1a" : "linear-gradient(135deg, #2563eb, #7c3aed)", color: loading ? "#444" : "#fff", border: "none", cursor: loading ? "not-allowed" : "pointer", fontSize: "18px", fontWeight: 700, flexShrink: 0 }}>
-                ↑
-              </button>
-            </div>
-
-            <style>{`
-              @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-              @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-            `}</style>
-          </>
-        )}
-
-        {activeTab === "tests" && (
-          <>
-            <div style={{ padding: "0.875rem 1.5rem", borderBottom: "1px solid #1e1e1e", background: "#0f0f0f", display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#34d399", boxShadow: "0 0 8px #34d399" }}></div>
-              <span style={{ fontSize: "14px", fontWeight: 600 }}>🧪 Test Case Generator</span>
-              {testStatus && <span style={{ fontSize: "12px", color: "#facc15", marginLeft: "8px" }}>{testStatus}</span>}
-            </div>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1rem", overflowY: "auto" }}>
-              <div style={{ fontSize: "13px", color: "#666" }}>Describe the feature you want to test:</div>
-              <textarea value={featureDesc} onChange={e => setFeatureDesc(e.target.value)} placeholder="Example: A login form with email and password fields..." rows={5} style={inputStyle} />
-              <button onClick={() => generateWithStream("mistral-nemo:latest", TEST_GEN_SYSTEM, `Generate test cases for:\n\n${featureDesc}`, setTestOutput, setTestLoading, setTestStatus, ["🔍 Analyzing feature...", "📝 Writing test cases...", "✍️ Adding edge cases..."])} disabled={testLoading || !featureDesc.trim()} style={btnStyle("#34d399", testLoading || !featureDesc.trim())}>
-                {testLoading ? testStatus : "🧪 Generate Test Cases"}
-              </button>
-              {testOutput && <div style={cardStyle}>{testOutput}</div>}
+                <div style={{ textAlign: "center", fontSize: "11px", color: "#3a3a3c", marginTop: "8px", letterSpacing: "0.01em" }}>
+                  Runs privately on your Mac — no data sent to any server
+                </div>
+              </div>
             </div>
           </>
         )}
 
-        {activeTab === "scripts" && (
+        {/* Tool tabs */}
+        {activeTab !== "chat" && (
           <>
-            <div style={{ padding: "0.875rem 1.5rem", borderBottom: "1px solid #1e1e1e", background: "#0f0f0f", display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#a78bfa", boxShadow: "0 0 8px #a78bfa" }}></div>
-              <span style={{ fontSize: "14px", fontWeight: 600 }}>⌨️ Selenium Script Generator</span>
-              {seleniumStatus && <span style={{ fontSize: "12px", color: "#facc15", marginLeft: "8px" }}>{seleniumStatus}</span>}
-            </div>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1rem", overflowY: "auto" }}>
-              <div style={{ fontSize: "13px", color: "#666" }}>Describe what you want to automate:</div>
-              <textarea value={seleniumDesc} onChange={e => setSeleniumDesc(e.target.value)} placeholder="Example: A login form at https://the-internet.herokuapp.com/login..." rows={5} style={inputStyle} />
-              <button onClick={() => generateWithStream("qwen2.5-coder:latest", SELENIUM_SYSTEM, `Generate Selenium script for:\n\n${seleniumDesc}`, setSeleniumOutput, setSeleniumLoading, setSeleniumStatus, ["🔍 Analyzing requirements...", "⌨️ Writing test functions...", "🔧 Adding assertions..."])} disabled={seleniumLoading || !seleniumDesc.trim()} style={btnStyle("#a78bfa", seleniumLoading || !seleniumDesc.trim())}>
-                {seleniumLoading ? seleniumStatus : "⌨️ Generate Selenium Script"}
-              </button>
-              {seleniumOutput && <div style={{ ...cardStyle, fontFamily: "monospace", fontSize: "13px" }}>{seleniumOutput}</div>}
-            </div>
-          </>
-        )}
-
-        {activeTab === "bugs" && (
-          <>
-            <div style={{ padding: "0.875rem 1.5rem", borderBottom: "1px solid #1e1e1e", background: "#0f0f0f", display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f87171", boxShadow: "0 0 8px #f87171" }}></div>
-              <span style={{ fontSize: "14px", fontWeight: 600 }}>🐛 Bug Report Generator</span>
-              {bugStatus && <span style={{ fontSize: "12px", color: "#facc15", marginLeft: "8px" }}>{bugStatus}</span>}
-            </div>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1rem", overflowY: "auto" }}>
-              <div style={{ fontSize: "13px", color: "#666" }}>Describe the bug you found:</div>
-              <textarea value={bugDesc} onChange={e => setBugDesc(e.target.value)} placeholder="Example: When clicking submit with valid credentials, nothing happens..." rows={5} style={inputStyle} />
-              <button onClick={() => generateWithStream("mistral-nemo:latest", BUG_REPORT_SYSTEM, `Generate bug report for:\n\n${bugDesc}`, setBugOutput, setBugLoading, setBugStatus, ["🔍 Analyzing bug...", "📝 Structuring report...", "🐛 Adding recommendations..."])} disabled={bugLoading || !bugDesc.trim()} style={btnStyle("#f87171", bugLoading || !bugDesc.trim())}>
-                {bugLoading ? bugStatus : "🐛 Generate Bug Report"}
-              </button>
-              {bugOutput && <div style={cardStyle}>{bugOutput}</div>}
-            </div>
-          </>
-        )}
-
-        {activeTab === "pipeline" && (
-          <>
-            <div style={{ padding: "0.875rem 1.5rem", borderBottom: "1px solid #1e1e1e", background: "#0f0f0f", display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: pipelineLoading ? "#facc15" : pipelineTests ? "#4ade80" : "#555", boxShadow: pipelineLoading ? "0 0 8px #facc15" : pipelineTests ? "0 0 8px #4ade80" : "none" }}></div>
-              <span style={{ fontSize: "14px", fontWeight: 600 }}>🚀 Full QA Pipeline</span>
-              {pipelineStep && <span style={{ fontSize: "12px", color: "#facc15", marginLeft: "8px" }}>{pipelineStep}</span>}
-            </div>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1.25rem", overflowY: "auto" }}>
-              <div style={{ fontSize: "13px", color: "#666" }}>Describe your feature — the pipeline generates everything automatically:</div>
-              <textarea value={pipelineDesc} onChange={e => setPipelineDesc(e.target.value)} placeholder="Example: A login form with email and password fields. Users can log in with valid credentials, see error messages for invalid inputs, and reset their password via email." rows={4} style={inputStyle} />
-              <button onClick={runPipeline} disabled={pipelineLoading || !pipelineDesc.trim()} style={{ padding: "1rem 2rem", borderRadius: "10px", background: pipelineLoading || !pipelineDesc.trim() ? "#1a1a1a" : "linear-gradient(135deg, #34d399, #a78bfa, #f87171)", color: pipelineLoading || !pipelineDesc.trim() ? "#444" : "#fff", border: "none", cursor: pipelineLoading || !pipelineDesc.trim() ? "not-allowed" : "pointer", fontSize: "15px", fontWeight: 700, alignSelf: "flex-start" }}>
-                {pipelineLoading ? pipelineStep : "🚀 Run Full QA Pipeline"}
-              </button>
-
-              {pipelineTests && (
-                <div>
-                  <div style={{ fontSize: "12px", color: "#34d399", fontWeight: 700, marginBottom: "0.5rem", letterSpacing: "0.05em" }}>🧪 TEST CASES</div>
-                  <div style={cardStyle}>{pipelineTests}</div>
-                </div>
+            <div style={{ height: "52px", borderBottom: "0.5px solid #2c2c2e", display: "flex", alignItems: "center", padding: "0 32px", gap: "10px", background: "#1c1c1e", flexShrink: 0 }}>
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#0a84ff" }} />
+              <span style={{ fontSize: "13px", color: "#f5f5f7", fontWeight: 500 }}>
+                {activeTab === "tests" && "Test Case Generator"}
+                {activeTab === "scripts" && "Selenium Script Generator"}
+                {activeTab === "bugs" && "Bug Report Generator"}
+                {activeTab === "pipeline" && "QA Pipeline"}
+              </span>
+              {(testStatus || seleniumStatus || bugStatus || pipelineStep) && (
+                <span style={{ fontSize: "12px", color: "#48484a" }}>
+                  — {testStatus || seleniumStatus || bugStatus || pipelineStep}
+                </span>
               )}
-              {pipelineScript && (
-                <div>
-                  <div style={{ fontSize: "12px", color: "#a78bfa", fontWeight: 700, marginBottom: "0.5rem", letterSpacing: "0.05em" }}>⌨️ SELENIUM SCRIPT</div>
-                  <div style={{ ...cardStyle, fontFamily: "monospace", fontSize: "13px" }}>{pipelineScript}</div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: "auto", padding: "32px" }}>
+              <div style={{ maxWidth: "720px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ fontSize: "13px", color: "#8e8e93" }}>
+                  {activeTab === "tests" && "Describe the feature you want to generate test cases for."}
+                  {activeTab === "scripts" && "Describe what you want to automate with Selenium."}
+                  {activeTab === "bugs" && "Describe the bug you found."}
+                  {activeTab === "pipeline" && "Describe your feature. The pipeline generates test cases, a Selenium script, and a bug report template automatically."}
                 </div>
-              )}
-              {pipelineBug && (
-                <div>
-                  <div style={{ fontSize: "12px", color: "#f87171", fontWeight: 700, marginBottom: "0.5rem", letterSpacing: "0.05em" }}>🐛 BUG REPORT TEMPLATE</div>
-                  <div style={cardStyle}>{pipelineBug}</div>
-                </div>
-              )}
+
+                <textarea
+                  value={activeTab === "tests" ? featureDesc : activeTab === "scripts" ? seleniumDesc : activeTab === "bugs" ? bugDesc : pipelineDesc}
+                  onChange={e => {
+                    if (activeTab === "tests") setFeatureDesc(e.target.value);
+                    else if (activeTab === "scripts") setSeleniumDesc(e.target.value);
+                    else if (activeTab === "bugs") setBugDesc(e.target.value);
+                    else setPipelineDesc(e.target.value);
+                  }}
+                  placeholder={
+                    activeTab === "tests" ? "Example: A login form with email and password fields. Users can log in with valid credentials and see error messages for invalid inputs." :
+                    activeTab === "scripts" ? "Example: A login form at https://the-internet.herokuapp.com/login with username 'tomsmith' and password 'SuperSecretPassword!'." :
+                    activeTab === "bugs" ? "Example: When clicking submit with valid credentials, nothing happens. No error message appears and the user is not redirected." :
+                    "Example: A login form with email and password fields. Users can log in, see errors for invalid inputs, and reset their password via email."
+                  }
+                  rows={5}
+                  style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", color: "#f5f5f7", padding: "14px 16px", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "inherit", lineHeight: 1.6, letterSpacing: "-0.01em" }}
+                />
+
+                <button
+                  onClick={() => {
+                    if (activeTab === "tests") generateWithStream("mistral-nemo:latest", TEST_GEN_SYSTEM, `Generate test cases for:\n\n${featureDesc}`, setTestOutput, setTestLoading, setTestStatus, "Analyzing…", "Writing test cases…", "Adding edge cases…");
+                    else if (activeTab === "scripts") generateWithStream("qwen2.5-coder:latest", SELENIUM_SYSTEM, `Generate Selenium script for:\n\n${seleniumDesc}`, setSeleniumOutput, setSeleniumLoading, setSeleniumStatus, "Analyzing…", "Writing functions…", "Adding assertions…");
+                    else if (activeTab === "bugs") generateWithStream("mistral-nemo:latest", BUG_REPORT_SYSTEM, `Generate bug report for:\n\n${bugDesc}`, setBugOutput, setBugLoading, setBugStatus, "Analyzing issue…", "Structuring report…", "Adding detail…");
+                    else runPipeline();
+                  }}
+                  disabled={
+                    (activeTab === "tests" && (testLoading || !featureDesc.trim())) ||
+                    (activeTab === "scripts" && (seleniumLoading || !seleniumDesc.trim())) ||
+                    (activeTab === "bugs" && (bugLoading || !bugDesc.trim())) ||
+                    (activeTab === "pipeline" && (pipelineLoading || !pipelineDesc.trim()))
+                  }
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: "10px",
+                    background: "#0a84ff",
+                    color: "#fff",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                    alignSelf: "flex-start",
+                    letterSpacing: "-0.01em",
+                    opacity: (
+                      (activeTab === "tests" && (testLoading || !featureDesc.trim())) ||
+                      (activeTab === "scripts" && (seleniumLoading || !seleniumDesc.trim())) ||
+                      (activeTab === "bugs" && (bugLoading || !bugDesc.trim())) ||
+                      (activeTab === "pipeline" && (pipelineLoading || !pipelineDesc.trim()))
+                    ) ? 0.3 : 1,
+                    transition: "opacity 0.2s"
+                  }}
+                >
+                  {activeTab === "tests" && (testLoading ? testStatus : "Generate")}
+                  {activeTab === "scripts" && (seleniumLoading ? seleniumStatus : "Generate")}
+                  {activeTab === "bugs" && (bugLoading ? bugStatus : "Generate")}
+                  {activeTab === "pipeline" && (pipelineLoading ? pipelineStep : "Run Pipeline")}
+                </button>
+
+                {(testOutput || seleniumOutput || bugOutput) && activeTab !== "pipeline" && (
+                  <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "20px", whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.8, color: "#d1d1d6", fontFamily: activeTab === "scripts" ? "monospace" : "inherit", letterSpacing: activeTab === "scripts" ? "0" : "-0.01em" }}>
+                    {activeTab === "tests" ? testOutput : activeTab === "scripts" ? seleniumOutput : bugOutput}
+                  </div>
+                )}
+
+                {activeTab === "pipeline" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {pipelineTests && (
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#30d158", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "8px" }}>Test Cases</div>
+                        <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "20px", whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.8, color: "#d1d1d6" }}>{pipelineTests}</div>
+                      </div>
+                    )}
+                    {pipelineScript && (
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#0a84ff", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "8px" }}>Selenium Script</div>
+                        <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "20px", whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.8, color: "#d1d1d6", fontFamily: "monospace" }}>{pipelineScript}</div>
+                      </div>
+                    )}
+                    {pipelineBug && (
+                      <div>
+                        <div style={{ fontSize: "11px", color: "#ffd60a", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "8px" }}>Bug Report Template</div>
+                        <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "20px", whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.8, color: "#d1d1d6" }}>{pipelineBug}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
