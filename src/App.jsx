@@ -134,6 +134,36 @@ Format exactly like this:
 - [ ] Console logs
 - [ ] Network logs`;
 
+const INTERVIEW_SYSTEM = `You are a senior Apple QA engineering hiring manager with 15 years of experience interviewing and hiring QA engineers at Apple. You ask tough, realistic interview questions and give honest, constructive feedback.
+
+When given an answer to evaluate, give structured feedback in this exact format:
+**Score: X/10**
+
+**What you did well:**
+[specific strengths]
+
+**What to improve:**
+[specific gaps or missing elements]
+
+**Ideal answer would include:**
+[what a great candidate would say]
+
+**Apple-specific tip:**
+[one specific insight about what Apple looks for]`;
+
+const INTERVIEW_QUESTIONS = [
+  "Walk me through how you would design a test plan for a new iOS feature from scratch.",
+  "Describe a time you found a critical bug close to a release deadline. How did you handle it?",
+  "How would you approach accessibility testing for an Apple product? What frameworks and standards would you apply?",
+  "What is the difference between black box, white box, and grey box testing? Give a real example of when you would use each.",
+  "How would you build an automated regression test suite for an iPhone app using XCTest?",
+  "Explain how your bioengineering background makes you a stronger QA engineer than a traditional CS candidate.",
+  "How do you prioritize which bugs to report and escalate when you have limited time before a release?",
+  "Describe your experience with API testing. What tools have you used and how do you validate API responses?",
+  "Apple cares deeply about user experience. How do you incorporate UX quality into your testing process beyond functional testing?",
+  "Where do you see QA engineering going in the next 5 years, and how are you preparing for those changes?"
+];
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("chat");
   const [chats, setChats] = useState([{ id: 1, name: "New Conversation", messages: [] }]);
@@ -165,6 +195,14 @@ export default function App() {
   const [pipelineTests, setPipelineTests] = useState("");
   const [pipelineScript, setPipelineScript] = useState("");
   const [pipelineBug, setPipelineBug] = useState("");
+  const [interviewStarted, setInterviewStarted] = useState(false);
+  const [interviewQuestion, setInterviewQuestion] = useState("");
+  const [interviewAnswer, setInterviewAnswer] = useState("");
+  const [interviewFeedback, setInterviewFeedback] = useState("");
+  const [interviewLoading, setInterviewLoading] = useState(false);
+  const [interviewStatus, setInterviewStatus] = useState("");
+  const [interviewQuestionNum, setInterviewQuestionNum] = useState(0);
+  const [interviewHistory, setInterviewHistory] = useState([]);
   const fileRef = useRef(null);
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
@@ -303,6 +341,38 @@ export default function App() {
     setPipelineLoading(false);
   };
 
+  const startInterview = () => {
+    setInterviewStarted(true);
+    setInterviewQuestionNum(1);
+    setInterviewQuestion(INTERVIEW_QUESTIONS[0]);
+    setInterviewAnswer(""); setInterviewFeedback(""); setInterviewHistory([]);
+  };
+
+  const submitAnswer = async () => {
+    if (!interviewAnswer.trim() || interviewLoading) return;
+    setInterviewLoading(true); setInterviewStatus("Evaluating your answer…");
+    try {
+      const feedback = await callAI("mistral-nemo:latest", INTERVIEW_SYSTEM, `Question: ${interviewQuestion}\n\nCandidate's answer: ${interviewAnswer}\n\nEvaluate this answer.`);
+      setInterviewFeedback(feedback);
+      setInterviewHistory(prev => [...prev, { question: interviewQuestion, answer: interviewAnswer, feedback }]);
+      setInterviewStatus("");
+    } catch { setInterviewStatus("Error — is Ollama running?"); }
+    setInterviewLoading(false);
+  };
+
+  const nextQuestion = () => {
+    if (interviewQuestionNum >= 10) { resetInterview(); return; }
+    setInterviewQuestionNum(prev => prev + 1);
+    setInterviewQuestion(INTERVIEW_QUESTIONS[interviewQuestionNum]);
+    setInterviewAnswer(""); setInterviewFeedback("");
+  };
+
+  const resetInterview = () => {
+    setInterviewStarted(false); setInterviewQuestionNum(0);
+    setInterviewQuestion(""); setInterviewAnswer("");
+    setInterviewFeedback(""); setInterviewHistory([]);
+  };
+
   const handleKeyDown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
   const handleInput = (e) => {
     setInput(e.target.value);
@@ -310,7 +380,7 @@ export default function App() {
     e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px";
   };
 
-  const TABS = ["Chat", "Tests", "Scripts", "Bugs", "Pipeline"];
+  const TABS = ["Chat", "Tests", "Scripts", "Bugs", "Pipeline", "Interview"];
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#1c1c1e", fontFamily: "-apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif", color: "#f5f5f7" }}>
@@ -321,14 +391,11 @@ export default function App() {
         @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.4)} }
         ::-webkit-scrollbar { width: 0px; }
         textarea::placeholder { color: #48484a; }
-        input::placeholder { color: #48484a; }
         button { -webkit-tap-highlight-color: transparent; }
       `}</style>
 
       {/* Sidebar */}
       <div style={{ width: "252px", background: "#161618", borderRight: "0.5px solid #2c2c2e", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-        
-        {/* App header */}
         <div style={{ padding: "20px 16px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px" }}>
             <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "linear-gradient(135deg, #0a84ff, #5e5ce6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px" }}>◎</div>
@@ -337,8 +404,6 @@ export default function App() {
               <div style={{ fontSize: "10px", color: "#48484a", letterSpacing: "0.02em" }}>Private · Local</div>
             </div>
           </div>
-
-          {/* Tabs */}
           <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
             {TABS.map(t => {
               const id = t.toLowerCase();
@@ -355,10 +420,9 @@ export default function App() {
 
         <div style={{ height: "0.5px", background: "#2c2c2e", margin: "0 16px" }} />
 
-        {/* Chat list */}
         {activeTab === "chat" && (
           <>
-            <div style={{ padding: "12px 16px 6px" }}>
+            <div style={{ padding: "12px 8px 4px" }}>
               <button onClick={newChat} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", borderRadius: "8px", background: "transparent", border: "none", cursor: "pointer", color: "#0a84ff", fontSize: "13px", fontWeight: 500, width: "100%" }}>
                 <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> New Conversation
               </button>
@@ -375,7 +439,6 @@ export default function App() {
 
         {activeTab !== "chat" && <div style={{ flex: 1 }} />}
 
-        {/* Footer controls */}
         <div style={{ padding: "12px 16px 20px", borderTop: "0.5px solid #2c2c2e" }}>
           {activeTab === "chat" && (
             <>
@@ -390,18 +453,14 @@ export default function App() {
               <button onClick={() => fileRef.current.click()} style={{ display: "block", width: "100%", padding: "7px 10px", borderRadius: "8px", background: "transparent", border: "0.5px solid #3a3a3c", color: docName ? "#30d158" : "#8e8e93", fontSize: "13px", cursor: "pointer", textAlign: "left", marginBottom: "6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {docLoading ? "Reading…" : docName ? `📄 ${docName}` : "Attach Document"}
               </button>
-              {docName && (
-                <button onClick={() => { setDocText(""); setDocName(""); }} style={{ display: "block", width: "100%", padding: "6px 10px", borderRadius: "8px", background: "transparent", border: "none", color: "#48484a", fontSize: "12px", cursor: "pointer", textAlign: "left", marginBottom: "6px" }}>
-                  Remove attachment
-                </button>
-              )}
+              {docName && <button onClick={() => { setDocText(""); setDocName(""); }} style={{ display: "block", width: "100%", padding: "6px 10px", borderRadius: "8px", background: "transparent", border: "none", color: "#48484a", fontSize: "12px", cursor: "pointer", textAlign: "left", marginBottom: "6px" }}>Remove attachment</button>}
               <button onClick={() => exportContent(messages.map(m => `${m.role === "user" ? "You" : AGENTS[m.agent]?.name || "AI"}: ${m.content}`).join("\n\n"), `conversation-${Date.now()}.txt`)} style={{ display: "block", width: "100%", padding: "7px 10px", borderRadius: "8px", background: "transparent", border: "0.5px solid #3a3a3c", color: "#8e8e93", fontSize: "13px", cursor: "pointer", textAlign: "left" }}>
                 Export Conversation
               </button>
               <input ref={fileRef} type="file" accept=".txt,.md,.csv,.json,.pdf" onChange={handleFile} style={{ display: "none" }} />
             </>
           )}
-          {activeTab !== "chat" && (
+          {activeTab !== "chat" && activeTab !== "interview" && (
             <button onClick={() => {
               if (activeTab === "tests") exportContent(testOutput, `test-cases-${Date.now()}.md`);
               if (activeTab === "scripts") exportContent(seleniumOutput, `test_${Date.now()}.py`);
@@ -411,15 +470,19 @@ export default function App() {
               Export Output
             </button>
           )}
+          {activeTab === "interview" && interviewHistory.length > 0 && (
+            <button onClick={() => exportContent(interviewHistory.map((h, i) => `Q${i+1}: ${h.question}\n\nYour answer: ${h.answer}\n\nFeedback: ${h.feedback}`).join("\n\n---\n\n"), `interview-prep-${Date.now()}.txt`)} style={{ display: "block", width: "100%", padding: "7px 10px", borderRadius: "8px", background: "transparent", border: "0.5px solid #3a3a3c", color: "#8e8e93", fontSize: "13px", cursor: "pointer", textAlign: "left" }}>
+              Export Session
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main content */}
+      {/* Main */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
 
         {activeTab === "chat" && (
           <>
-            {/* Topbar */}
             <div style={{ height: "52px", borderBottom: "0.5px solid #2c2c2e", display: "flex", alignItems: "center", padding: "0 24px", gap: "10px", background: "#1c1c1e", flexShrink: 0 }}>
               {currentAgent ? (
                 <>
@@ -430,19 +493,12 @@ export default function App() {
               ) : (
                 <>
                   <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#0a84ff" }} />
-                  <span style={{ fontSize: "13px", color: "#8e8e93" }}>
-                    {status || "Ready"}
-                  </span>
+                  <span style={{ fontSize: "13px", color: "#8e8e93" }}>{status || "Ready"}</span>
                 </>
               )}
-              {docName && (
-                <div style={{ marginLeft: "auto", fontSize: "11px", color: "#30d158", background: "rgba(48,209,88,0.08)", padding: "3px 10px", borderRadius: "6px", border: "0.5px solid rgba(48,209,88,0.2)" }}>
-                  {docName}
-                </div>
-              )}
+              {docName && <div style={{ marginLeft: "auto", fontSize: "11px", color: "#30d158", background: "rgba(48,209,88,0.08)", padding: "3px 10px", borderRadius: "6px", border: "0.5px solid rgba(48,209,88,0.2)" }}>{docName}</div>}
             </div>
 
-            {/* Messages */}
             <div style={{ flex: 1, overflowY: "auto", padding: "32px 0" }}>
               <div style={{ maxWidth: "720px", margin: "0 auto", padding: "0 24px", display: "flex", flexDirection: "column", gap: "24px" }}>
                 {messages.length === 0 && !loading && (
@@ -454,9 +510,7 @@ export default function App() {
                     </div>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
                       {Object.entries(AGENTS).map(([key, a]) => (
-                        <div key={key} style={{ padding: "5px 12px", borderRadius: "20px", border: `0.5px solid ${a.color}44`, color: a.color, fontSize: "12px", background: a.color + "0d", letterSpacing: "0.01em" }}>
-                          {a.name}
-                        </div>
+                        <div key={key} style={{ padding: "5px 12px", borderRadius: "20px", border: `0.5px solid ${a.color}44`, color: a.color, fontSize: "12px", background: a.color + "0d" }}>{a.name}</div>
                       ))}
                     </div>
                   </div>
@@ -464,25 +518,9 @@ export default function App() {
 
                 {messages.map((m, i) => (
                   <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start", gap: "5px", animation: "fadeIn 0.2s ease" }}>
-                    {m.role === "assistant" && m.agent && (
-                      <div style={{ fontSize: "11px", color: AGENTS[m.agent]?.color || "#8e8e93", fontWeight: 500, letterSpacing: "0.03em", paddingLeft: "2px", textTransform: "uppercase" }}>
-                        {AGENTS[m.agent]?.name}
-                      </div>
-                    )}
-                    {m.role === "user" && (
-                      <div style={{ fontSize: "11px", color: "#48484a", paddingRight: "2px", textTransform: "uppercase", letterSpacing: "0.03em" }}>You</div>
-                    )}
-                    <div style={{
-                      maxWidth: "80%",
-                      padding: m.role === "user" ? "11px 16px" : "14px 18px",
-                      borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
-                      background: m.role === "user" ? "#0a84ff" : "#2c2c2e",
-                      color: "#f5f5f7",
-                      fontSize: "14px",
-                      lineHeight: 1.65,
-                      whiteSpace: "pre-wrap",
-                      letterSpacing: "-0.01em"
-                    }}>
+                    {m.role === "assistant" && m.agent && <div style={{ fontSize: "11px", color: AGENTS[m.agent]?.color || "#8e8e93", fontWeight: 500, letterSpacing: "0.03em", paddingLeft: "2px", textTransform: "uppercase" }}>{AGENTS[m.agent]?.name}</div>}
+                    {m.role === "user" && <div style={{ fontSize: "11px", color: "#48484a", paddingRight: "2px", textTransform: "uppercase", letterSpacing: "0.03em" }}>You</div>}
+                    <div style={{ maxWidth: "80%", padding: m.role === "user" ? "11px 16px" : "14px 18px", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "4px 18px 18px 18px", background: m.role === "user" ? "#0a84ff" : "#2c2c2e", color: "#f5f5f7", fontSize: "14px", lineHeight: 1.65, whiteSpace: "pre-wrap", letterSpacing: "-0.01em" }}>
                       {m.content}
                     </div>
                   </div>
@@ -490,11 +528,7 @@ export default function App() {
 
                 {loading && streamingContent && (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "5px", animation: "fadeIn 0.2s ease" }}>
-                    {currentAgent && (
-                      <div style={{ fontSize: "11px", color: AGENTS[currentAgent]?.color, fontWeight: 500, letterSpacing: "0.03em", paddingLeft: "2px", textTransform: "uppercase" }}>
-                        {AGENTS[currentAgent]?.name}
-                      </div>
-                    )}
+                    {currentAgent && <div style={{ fontSize: "11px", color: AGENTS[currentAgent]?.color, fontWeight: 500, letterSpacing: "0.03em", paddingLeft: "2px", textTransform: "uppercase" }}>{AGENTS[currentAgent]?.name}</div>}
                     <div style={{ maxWidth: "80%", padding: "14px 18px", borderRadius: "4px 18px 18px 18px", background: "#2c2c2e", color: "#f5f5f7", fontSize: "14px", lineHeight: 1.65, whiteSpace: "pre-wrap", letterSpacing: "-0.01em" }}>
                       {streamingContent}
                       <span style={{ display: "inline-block", width: "1.5px", height: "14px", background: "#0a84ff", marginLeft: "2px", animation: "blink 0.7s infinite", verticalAlign: "text-bottom", borderRadius: "1px" }} />
@@ -503,12 +537,10 @@ export default function App() {
                 )}
 
                 {loading && !streamingContent && (
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: "5px", flexDirection: "column" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "5px" }}>
                     {currentAgent && <div style={{ fontSize: "11px", color: AGENTS[currentAgent]?.color, fontWeight: 500, letterSpacing: "0.03em", paddingLeft: "2px", textTransform: "uppercase" }}>{AGENTS[currentAgent]?.name}</div>}
                     <div style={{ padding: "14px 18px", borderRadius: "4px 18px 18px 18px", background: "#2c2c2e", display: "flex", gap: "5px", alignItems: "center" }}>
-                      {[0, 0.18, 0.36].map((d, i) => (
-                        <div key={i} style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#48484a", animation: `pulse 1.2s infinite ${d}s` }} />
-                      ))}
+                      {[0, 0.18, 0.36].map((d, i) => <div key={i} style={{ width: "4px", height: "4px", borderRadius: "50%", background: "#48484a", animation: `pulse 1.2s infinite ${d}s` }} />)}
                     </div>
                   </div>
                 )}
@@ -516,33 +548,19 @@ export default function App() {
               </div>
             </div>
 
-            {/* Input */}
             <div style={{ padding: "12px 24px 20px", background: "#1c1c1e", flexShrink: 0 }}>
               <div style={{ maxWidth: "720px", margin: "0 auto" }}>
                 <div style={{ display: "flex", alignItems: "flex-end", gap: "10px", background: "#2c2c2e", borderRadius: "16px", padding: "10px 10px 10px 16px", border: "0.5px solid #3a3a3c" }}>
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={handleInput}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Message AI Suite…"
-                    rows={1}
-                    style={{ flex: 1, background: "transparent", border: "none", color: "#f5f5f7", fontSize: "14px", outline: "none", resize: "none", fontFamily: "inherit", lineHeight: 1.6, height: "22px", letterSpacing: "-0.01em" }}
-                  />
-                  <button onClick={sendMessage} disabled={loading || !input.trim()} style={{ width: "32px", height: "32px", borderRadius: "10px", background: (!loading && input.trim()) ? "#0a84ff" : "#3a3a3c", color: (!loading && input.trim()) ? "#fff" : "#48484a", border: "none", cursor: (!loading && input.trim()) ? "pointer" : "not-allowed", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}>
-                    ↑
-                  </button>
+                  <textarea ref={textareaRef} value={input} onChange={handleInput} onKeyDown={handleKeyDown} placeholder="Message AI Suite…" rows={1} style={{ flex: 1, background: "transparent", border: "none", color: "#f5f5f7", fontSize: "14px", outline: "none", resize: "none", fontFamily: "inherit", lineHeight: 1.6, height: "22px", letterSpacing: "-0.01em" }} />
+                  <button onClick={sendMessage} disabled={loading || !input.trim()} style={{ width: "32px", height: "32px", borderRadius: "10px", background: (!loading && input.trim()) ? "#0a84ff" : "#3a3a3c", color: (!loading && input.trim()) ? "#fff" : "#48484a", border: "none", cursor: (!loading && input.trim()) ? "pointer" : "not-allowed", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}>↑</button>
                 </div>
-                <div style={{ textAlign: "center", fontSize: "11px", color: "#3a3a3c", marginTop: "8px", letterSpacing: "0.01em" }}>
-                  Runs privately on your Mac — no data sent to any server
-                </div>
+                <div style={{ textAlign: "center", fontSize: "11px", color: "#3a3a3c", marginTop: "8px" }}>Runs privately on your Mac — no data sent to any server</div>
               </div>
             </div>
           </>
         )}
 
-        {/* Tool tabs */}
-        {activeTab !== "chat" && (
+        {activeTab !== "chat" && activeTab !== "interview" && (
           <>
             <div style={{ height: "52px", borderBottom: "0.5px solid #2c2c2e", display: "flex", alignItems: "center", padding: "0 32px", gap: "10px", background: "#1c1c1e", flexShrink: 0 }}>
               <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#0a84ff" }} />
@@ -552,11 +570,7 @@ export default function App() {
                 {activeTab === "bugs" && "Bug Report Generator"}
                 {activeTab === "pipeline" && "QA Pipeline"}
               </span>
-              {(testStatus || seleniumStatus || bugStatus || pipelineStep) && (
-                <span style={{ fontSize: "12px", color: "#48484a" }}>
-                  — {testStatus || seleniumStatus || bugStatus || pipelineStep}
-                </span>
-              )}
+              {(testStatus || seleniumStatus || bugStatus || pipelineStep) && <span style={{ fontSize: "12px", color: "#48484a" }}>— {testStatus || seleniumStatus || bugStatus || pipelineStep}</span>}
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: "32px" }}>
@@ -577,13 +591,13 @@ export default function App() {
                     else setPipelineDesc(e.target.value);
                   }}
                   placeholder={
-                    activeTab === "tests" ? "Example: A login form with email and password fields. Users can log in with valid credentials and see error messages for invalid inputs." :
-                    activeTab === "scripts" ? "Example: A login form at https://the-internet.herokuapp.com/login with username 'tomsmith' and password 'SuperSecretPassword!'." :
-                    activeTab === "bugs" ? "Example: When clicking submit with valid credentials, nothing happens. No error message appears and the user is not redirected." :
-                    "Example: A login form with email and password fields. Users can log in, see errors for invalid inputs, and reset their password via email."
+                    activeTab === "tests" ? "Example: A login form with email and password fields." :
+                    activeTab === "scripts" ? "Example: A login form at https://the-internet.herokuapp.com/login" :
+                    activeTab === "bugs" ? "Example: Clicking submit with valid credentials does nothing." :
+                    "Example: A login form with email and password fields."
                   }
                   rows={5}
-                  style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", color: "#f5f5f7", padding: "14px 16px", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "inherit", lineHeight: 1.6, letterSpacing: "-0.01em" }}
+                  style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", color: "#f5f5f7", padding: "14px 16px", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "inherit", lineHeight: 1.6 }}
                 />
 
                 <button
@@ -599,25 +613,7 @@ export default function App() {
                     (activeTab === "bugs" && (bugLoading || !bugDesc.trim())) ||
                     (activeTab === "pipeline" && (pipelineLoading || !pipelineDesc.trim()))
                   }
-                  style={{
-                    padding: "10px 20px",
-                    borderRadius: "10px",
-                    background: "#0a84ff",
-                    color: "#fff",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: 500,
-                    alignSelf: "flex-start",
-                    letterSpacing: "-0.01em",
-                    opacity: (
-                      (activeTab === "tests" && (testLoading || !featureDesc.trim())) ||
-                      (activeTab === "scripts" && (seleniumLoading || !seleniumDesc.trim())) ||
-                      (activeTab === "bugs" && (bugLoading || !bugDesc.trim())) ||
-                      (activeTab === "pipeline" && (pipelineLoading || !pipelineDesc.trim()))
-                    ) ? 0.3 : 1,
-                    transition: "opacity 0.2s"
-                  }}
+                  style={{ padding: "10px 20px", borderRadius: "10px", background: "#0a84ff", color: "#fff", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: 500, alignSelf: "flex-start", opacity: ((activeTab === "tests" && (testLoading || !featureDesc.trim())) || (activeTab === "scripts" && (seleniumLoading || !seleniumDesc.trim())) || (activeTab === "bugs" && (bugLoading || !bugDesc.trim())) || (activeTab === "pipeline" && (pipelineLoading || !pipelineDesc.trim()))) ? 0.3 : 1, transition: "opacity 0.2s" }}
                 >
                   {activeTab === "tests" && (testLoading ? testStatus : "Generate")}
                   {activeTab === "scripts" && (seleniumLoading ? seleniumStatus : "Generate")}
@@ -626,7 +622,7 @@ export default function App() {
                 </button>
 
                 {(testOutput || seleniumOutput || bugOutput) && activeTab !== "pipeline" && (
-                  <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "20px", whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.8, color: "#d1d1d6", fontFamily: activeTab === "scripts" ? "monospace" : "inherit", letterSpacing: activeTab === "scripts" ? "0" : "-0.01em" }}>
+                  <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "20px", whiteSpace: "pre-wrap", fontSize: "13px", lineHeight: 1.8, color: "#d1d1d6", fontFamily: activeTab === "scripts" ? "monospace" : "inherit" }}>
                     {activeTab === "tests" ? testOutput : activeTab === "scripts" ? seleniumOutput : bugOutput}
                   </div>
                 )}
@@ -652,6 +648,85 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeTab === "interview" && (
+          <>
+            <div style={{ height: "52px", borderBottom: "0.5px solid #2c2c2e", display: "flex", alignItems: "center", padding: "0 32px", gap: "10px", background: "#1c1c1e", flexShrink: 0 }}>
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ffd60a" }} />
+              <span style={{ fontSize: "13px", color: "#f5f5f7", fontWeight: 500 }}>Apple QA Interview Prep</span>
+              {interviewStatus && <span style={{ fontSize: "12px", color: "#48484a" }}>— {interviewStatus}</span>}
+              {interviewStarted && <span style={{ fontSize: "12px", color: "#48484a", marginLeft: "auto" }}>Question {interviewQuestionNum} of 10</span>}
+            </div>
+
+            <div style={{ flex: 1, overflowY: "auto", padding: "32px" }}>
+              <div style={{ maxWidth: "720px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "16px" }}>
+                {!interviewStarted ? (
+                  <>
+                    <div style={{ fontSize: "13px", color: "#8e8e93", lineHeight: 1.7 }}>
+                      Practice real Apple QA engineering interview questions. The AI acts as an Apple hiring manager — it asks you one question at a time, evaluates your answer, and gives detailed feedback with a score.
+                    </div>
+                    <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div style={{ fontSize: "11px", color: "#ffd60a", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>10 Questions Covering</div>
+                      {["Test planning and methodology", "Accessibility and Apple HIG", "Automation with XCTest and Selenium", "Bug triage and escalation", "Your bioengineering advantage", "Behavioral and situational scenarios"].map((item, i) => (
+                        <div key={i} style={{ fontSize: "13px", color: "#8e8e93", display: "flex", gap: "8px", alignItems: "center" }}>
+                          <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: "#3a3a3c", flexShrink: 0 }} />
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={startInterview} style={{ padding: "10px 20px", borderRadius: "10px", background: "#ffd60a", color: "#000", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: 600, alignSelf: "flex-start" }}>
+                      Begin Interview
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "20px" }}>
+                      <div style={{ fontSize: "11px", color: "#ffd60a", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "12px" }}>Question {interviewQuestionNum}</div>
+                      <div style={{ fontSize: "15px", color: "#f5f5f7", lineHeight: 1.7, letterSpacing: "-0.01em" }}>{interviewQuestion}</div>
+                    </div>
+
+                    {!interviewFeedback && (
+                      <>
+                        <textarea
+                          value={interviewAnswer}
+                          onChange={e => setInterviewAnswer(e.target.value)}
+                          placeholder="Type your answer here… Take your time, think like a candidate in a real Apple interview."
+                          rows={7}
+                          style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", color: "#f5f5f7", padding: "14px 16px", fontSize: "14px", resize: "vertical", outline: "none", fontFamily: "inherit", lineHeight: 1.6 }}
+                        />
+                        <div style={{ display: "flex", gap: "10px" }}>
+                          <button onClick={submitAnswer} disabled={interviewLoading || !interviewAnswer.trim()} style={{ padding: "10px 20px", borderRadius: "10px", background: "#ffd60a", color: "#000", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: 600, opacity: (interviewLoading || !interviewAnswer.trim()) ? 0.3 : 1, transition: "opacity 0.2s" }}>
+                            {interviewLoading ? interviewStatus : "Submit Answer"}
+                          </button>
+                          <button onClick={resetInterview} style={{ padding: "10px 16px", borderRadius: "10px", background: "transparent", border: "0.5px solid #3a3a3c", color: "#48484a", fontSize: "14px", cursor: "pointer" }}>
+                            Start Over
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {interviewFeedback && (
+                      <>
+                        <div style={{ background: "#2c2c2e", border: "0.5px solid #3a3a3c", borderRadius: "12px", padding: "20px" }}>
+                          <div style={{ fontSize: "11px", color: "#30d158", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "12px" }}>Feedback</div>
+                          <div style={{ fontSize: "14px", color: "#d1d1d6", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>{interviewFeedback}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: "10px" }}>
+                          <button onClick={nextQuestion} style={{ padding: "10px 20px", borderRadius: "10px", background: interviewQuestionNum >= 10 ? "#30d158" : "#0a84ff", color: "#fff", border: "none", cursor: "pointer", fontSize: "14px", fontWeight: 600 }}>
+                            {interviewQuestionNum >= 10 ? "Finish Interview" : "Next Question →"}
+                          </button>
+                          <button onClick={resetInterview} style={{ padding: "10px 16px", borderRadius: "10px", background: "transparent", border: "0.5px solid #3a3a3c", color: "#48484a", fontSize: "14px", cursor: "pointer" }}>
+                            Start Over
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
                 )}
               </div>
             </div>
