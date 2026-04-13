@@ -1,68 +1,57 @@
-# Local AI Multi-Agent Chat App
+# Local AI Suite
 
-A private, eco-friendly AI chat application built with React that runs 100% locally on your machine. No cloud, no data collection, no subscriptions — forever free.
+A private, multi-agent AI chat application built with React that runs 100% locally on your machine. No cloud, no data collection, no subscriptions — completely free and private forever.
 
 ## What This Is
 
-This is a custom-built AI chat interface inspired by Apple's internal "Enchanté" tool. It features a multi-agent system that automatically routes your questions to the most qualified AI model.
+A custom-built AI assistant with specialized agents for different tasks. The system automatically routes your messages to the most appropriate agent based on context, giving you expert-level responses across coding, QA engineering, career advice, and general knowledge.
 
 ## Features
 
-- Multi-agent routing — automatically sends questions to the best specialist
-- Coding Agent (Qwen2.5 Coder) — code generation and debugging
-- QA Agent (Mistral Nemo) — testing methodologies and quality assurance
-- Career Agent (Mistral Nemo) — resume advice and interview prep
-- General Agent (Mistral 7B) — everything else
-- Document upload — analyze PDFs and text files locally
-- Chat history — multiple conversation sessions
-- Custom system prompts — change AI personality on the fly
-- Export conversations — download chats as text files
-- Model switching — swap between models in the UI
-- 100% private — nothing ever leaves your machine
+- **Multi-Agent Routing** — automatically selects the best AI model for your query
+- **Real-time Streaming** — responses appear word by word as the AI thinks
+- **Test Case Generator** — describe any feature and generate professional QA test cases
+- **Selenium Script Generator** — automatically writes Python Selenium automation scripts
+- **Bug Report Generator** — creates structured professional bug reports
+- **Full QA Pipeline** — one click generates test cases, Selenium scripts, and bug reports simultaneously
+- **Apple QA Interview Prep** — practice with real Apple QA engineering interview questions and get scored feedback
+- **Document Upload** — attach PDFs and text files for AI analysis
+- **Export** — save conversations, test cases, scripts, and reports
+
+## Agents
+
+- **Coding Agent** — powered by Qwen2.5 Coder, specializes in code generation and debugging
+- **QA Agent** — powered by Mistral Nemo, specializes in test planning and QA methodology
+- **Career Agent** — powered by Mistral Nemo, specializes in career coaching and interview prep
+- **General Agent** — powered by Mistral, handles all other queries
 
 ## Tech Stack
 
 - React + Vite
-- Ollama (local LLM runtime)
-- Mistral Nemo 12B, Llama 3.1 8B, Qwen2.5 Coder, Mistral 7B
-- pdfjs-dist for PDF parsing
-- Runs entirely on Apple Silicon (M1/M2/M3/M4)
-
-## Prerequisites
-
-- Mac with Apple Silicon (M1 or later recommended)
-- Ollama installed (ollama.ai)
-- Node.js 18+
-
-## Setup
-
-1. Install Ollama from ollama.ai
-2. Pull the required models:
-
-ollama pull mistral-nemo
-ollama pull llama3.1:8b
-ollama pull qwen2.5-coder
-ollama pull mistral
-
-3. Clone this repo and install dependencies:
-
-git clone https://github.com/9j77k8ffzw-coder/local-ai-chat.git
-cd local-ai-chat
-npm install
-
-4. Start the app:
-
-npm run dev
-
-5. Open http://localhost:5173 in your browser
-
-## How It Works
-
-When you send a message the Router Agent (Llama 3.1 8B) reads it and automatically decides which specialist should respond. Coding questions go to Qwen2.5 Coder, QA questions go to Mistral Nemo, career questions go to the Career Agent, and everything else goes to the General Agent. You can also manually select an agent from the dropdown.
+- Ollama (local AI runtime)
+- Mistral Nemo 12B
+- Qwen2.5 Coder
+- Llama 3.1 8B (routing)
+- pdfjs-dist (PDF parsing)
 
 ## Privacy
 
-All AI inference runs locally on your machine using your Apple Silicon Neural Engine. No data is ever sent to external servers. The app works completely offline after initial model downloads.
+Everything runs locally on your machine. No data is sent to any external server. No API keys required. No subscriptions.
+
+## Setup
+
+1. Install Ollama from ollama.com
+2. Pull required models:
+
+ollama pull mistral-nemo
+ollama pull qwen2.5-coder
+ollama pull llama3.1:8b
+ollama pull mistral
+
+3. Clone and run:
+
+npm install
+npm run dev
 
 ## Author
 
